@@ -10,6 +10,10 @@ proprietary OEM cloud layer inaccessible to developers.
 a CRC-16/Modbus checksum appended to DP 107 write payloads.** Without this
 checksum, the device silently ignores all write commands.
 
+## Screenshot
+
+![Home Assistant Dashboard](screenshot.png)
+
 ## Features
 
 - **Power ON/OFF** control
