@@ -19,6 +19,8 @@ checksum, the device silently ignores all write commands.
 - **Power ON/OFF** control
 - **Target temperature** setting for grill + 3 meat probes
 - **Live sensor data**: 4 temperatures + fan speed percentage
+- **Open lid detection**: automatically detects when the lid is opened (fan drops to 0%)
+- **Auto-restart after lid close**: when temperature starts rising again, sends ON command to restart the fan
 - **Real-time updates**: device pushes changes automatically (~3-5s interval)
 - **Home Assistant MQTT auto-discovery**: entities appear automatically
 
@@ -42,7 +44,7 @@ checksum, the device silently ignores all write commands.
 ### 3. Done
 
 The device appears under Settings → Devices & Services → MQTT with:
-- 5 sensors (Grill/Probe 1-3 temp, Fan speed)
+- 6 sensors (Grill/Probe 1-3 temp, Fan speed, Lid state)
 - 4 number controls (target temperatures)
 - 1 switch (Power ON/OFF)
 

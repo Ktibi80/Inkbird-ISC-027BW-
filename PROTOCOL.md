@@ -223,11 +223,35 @@ while True:
 
 ---
 
+## Open Lid Detection
+
+The Inkbird firmware has a built-in "open lid" feature. When a rapid temperature
+drop is detected, the fan stops (0%) to prevent oxygen from feeding the fire.
+The device stays in ON state but the fan will not restart automatically.
+
+**There is no dedicated DP for lid state.** Detection is based on:
+
+| Condition | Meaning |
+|-----------|---------|
+| `work_status` = ON, `fan` > 0% | Normal operation |
+| `work_status` = ON, `fan` = 0% | **Open lid** (or target reached) |
+| `work_status` = OFF | Device off |
+
+### Auto-Restart (v1.4+)
+
+The MQTT bridge monitors the grill temperature during open lid state. When
+3 consecutive readings show a rising temperature (>0.3°C per reading), the
+bridge assumes the lid has been closed and automatically sends an ON command
+to restart the fan. This eliminates the need to manually press the power
+button after closing the lid.
+
+---
+
 ## Home Assistant Integration
 
 A complete MQTT bridge add-on is included that exposes:
 
-- **Sensors:** Grill/Probe 1–3 temperature, fan speed
+- **Sensors:** Grill/Probe 1–3 temperature, fan speed, lid state
 - **Controls:** Power ON/OFF switch, grill/probe target temperature sliders
 - **Auto-discovery:** Appears automatically in HA via MQTT discovery
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 MQTT Bridge for Inkbird ISC-027BW 2.0 BBQ Fan Controller
-v1.3 - Passive listener mode: device pushes updates automatically.
+v1.4 - Open lid detection with auto-restart.
 """
 
 import tinytuya
@@ -161,7 +161,19 @@ def publish_discovery(mqttc):
         "device": DEVICE_INFO,
     }
     mqttc.publish(f"{HA_DISCOVERY}/switch/{uid_sw}/config", json.dumps(sw_cfg), retain=True)
-    log.info("HA discovery published")
+
+    uid_lid = f"{UNIQUE_PREFIX}_lid"
+    lid_cfg = {
+        "name": "Lid",
+        "unique_id": uid_lid,
+        "state_topic": f"{TOPIC_PREFIX}/sensor",
+        "value_template": "{{ value_json.lid }}",
+        "icon": "mdi:grill-outline",
+        "availability_topic": f"{TOPIC_PREFIX}/status",
+        "device": DEVICE_INFO,
+    }
+    mqttc.publish(f"{HA_DISCOVERY}/sensor/{uid_lid}/config", json.dumps(lid_cfg), retain=True)
+    log.info("HA discovery published (incl. open lid sensor)")
 
 
 SETTING_MAP = {
@@ -171,13 +183,34 @@ SETTING_MAP = {
     "probe3_target": 14,
 }
 
+LID_RISE_COUNT = 3  # consecutive rising readings before auto-restart
+
+
+def send_power_on(dev):
+    """Read current settings, set work_status=1, append CRC, write back."""
+    dev.set_socketTimeout(3)
+    r = dev.set_value(107, base64.b64encode(bytes(40)).decode())
+    if not r:
+        return None
+    dps = r.get("dps", r.get("data", {}).get("dps", {}))
+    if "107" not in dps:
+        return None
+    raw = bytearray(base64.b64decode(dps["107"]))
+    buf = bytearray(raw[:40])
+    buf[0] = 1
+    crc = crc16_modbus(bytes(buf))
+    blob = bytes(buf) + struct.pack("<H", crc)
+    wr = dev.set_value(107, base64.b64encode(blob).decode())
+    dev.set_socketTimeout(1)
+    return wr
+
 
 def main():
     if not TUYA_DEV_ID or not TUYA_IP or not TUYA_KEY:
         log.error("Missing Tuya config!")
         sys.exit(1)
 
-    log.info("Inkbird Bridge v1.3 (listener mode)")
+    log.info("Inkbird Bridge v1.4 (open lid auto-restart)")
     log.info("Device: %s @ %s", TUYA_DEV_ID, TUYA_IP)
 
     # ── MQTT ──
@@ -221,6 +254,13 @@ def main():
     last_poll = 0
     msg_count = 0
 
+    # ── Open lid detection ──
+    lid_open = False
+    prev_fan = -1
+    prev_grill = 0.0
+    rising_count = 0
+    work_on = False
+
     def connect_tuya():
         nonlocal dev
         try:
@@ -245,7 +285,7 @@ def main():
         return False
 
     def publish_data(data):
-        nonlocal last_data, msg_count
+        nonlocal last_data, msg_count, lid_open, prev_fan, prev_grill, rising_count, work_on
         if not data:
             return
         dps = data.get("dps", data.get("data", {}).get("dps", {}))
@@ -253,19 +293,61 @@ def main():
             if dp_id == "101" and isinstance(dp_val, str):
                 sensors = decode_101(dp_val)
                 if sensors:
+                    fan = sensors["fan_speed"]
+                    grill = sensors["grill_temp"]
+
+                    # Open lid detection: fan drops to 0 while device is ON
+                    if work_on and prev_fan > 0 and fan == 0:
+                        lid_open = True
+                        rising_count = 0
+                        log.warning("OPEN LID detected! Fan %d%% -> 0%%, grill=%.1fC", prev_fan, grill)
+                        mqttc.publish(f"{TOPIC_PREFIX}/lid", "OPEN", retain=True)
+
+                    # Auto-restart: lid is open and temp is rising (lid closed back)
+                    if lid_open and fan == 0:
+                        if grill > prev_grill + 0.3:
+                            rising_count += 1
+                        else:
+                            rising_count = 0
+
+                        if rising_count >= LID_RISE_COUNT:
+                            log.info("Lid closed! Temp rising for %d readings (%.1fC). Sending ON...", rising_count, grill)
+                            try:
+                                wr = send_power_on(dev)
+                                if wr:
+                                    publish_data(wr)
+                                    log.info("Auto-restart OK!")
+                                lid_open = False
+                                rising_count = 0
+                                mqttc.publish(f"{TOPIC_PREFIX}/lid", "CLOSED", retain=True)
+                            except Exception as e:
+                                log.warning("Auto-restart failed: %s", e)
+
+                    if fan > 0 and lid_open:
+                        lid_open = False
+                        rising_count = 0
+                        mqttc.publish(f"{TOPIC_PREFIX}/lid", "CLOSED", retain=True)
+                        log.info("Lid closed (fan running)")
+
+                    prev_fan = fan
+                    prev_grill = grill
+
+                    sensors["lid"] = "OPEN" if lid_open else "CLOSED"
                     mqttc.publish(f"{TOPIC_PREFIX}/sensor", json.dumps(sensors))
                     msg_count += 1
                     if msg_count % 10 == 1:
                         log.info(
-                            "G=%.1f P1=%.1f P2=%.1f P3=%.1f Fan=%d%%",
+                            "G=%.1f P1=%.1f P2=%.1f P3=%.1f Fan=%d%% Lid=%s",
                             sensors["grill_temp"], sensors["probe1_temp"],
                             sensors["probe2_temp"], sensors["probe3_temp"],
-                            sensors["fan_speed"],
+                            sensors["fan_speed"], sensors["lid"],
                         )
                     last_data = time.time()
             elif dp_id == "107" and isinstance(dp_val, str):
                 raw = bytearray(base64.b64decode(dp_val))
-                mqttc.publish(f"{TOPIC_PREFIX}/settings", json.dumps(decode_settings(raw)))
+                settings = decode_settings(raw)
+                work_on = settings.get("work_status") == "ON"
+                mqttc.publish(f"{TOPIC_PREFIX}/settings", json.dumps(settings))
                 last_data = time.time()
 
     connect_tuya()
