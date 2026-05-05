@@ -69,7 +69,29 @@ You need three values: `device_id`, `local_key`, and the device's local `IP addr
 4. Select **Device Management** → **Query Device Details in Bulk**
 5. Enter your `device_id` and click **Submit**
 6. In the response, find the `local_key` field — copy this value
-7. The device's **local IP address** can be found in your router's admin page (connected devices list) or by running `python -m tinytuya scan`
+
+#### 1.5 Find the device's local IP address
+
+The add-on connects to the device over your local network, so you need its IP.
+
+**Option A — Router admin page (easiest)**
+1. Open your router's admin page (usually `192.168.1.1` or `192.168.0.1`)
+2. Look for connected devices / DHCP client list
+3. Find the Inkbird device — its hostname is typically `ESP_XXXXXX` or similar
+4. Note the IP address (e.g., `192.168.1.42`)
+
+**Option B — TinyTuya scan**
+1. Install TinyTuya on any computer on the same network:
+   ```
+   pip install tinytuya
+   ```
+2. Run the network scan:
+   ```
+   python -m tinytuya scan
+   ```
+3. The scan lists all Tuya devices on your network with their IP addresses and device IDs
+
+**Tip:** Assign a static IP (DHCP reservation) in your router for the Inkbird so the address doesn't change after a reboot.
 
 > **Important:** Every time you re-pair the device or remove/re-add it in Smart Life, the `local_key` changes. You'll need to repeat step 1.4 to get the new key.
 
