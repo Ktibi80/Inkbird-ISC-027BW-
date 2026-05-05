@@ -83,10 +83,10 @@ def decode_settings(raw):
         return {}
     return {
         "work_status": "ON" if raw[0] else "OFF",
-        "grill_target": f10_to_c(struct.unpack_from("<H", raw, 6)[0]),
-        "probe1_target": f10_to_c(struct.unpack_from("<H", raw, 10)[0]),
-        "probe2_target": f10_to_c(struct.unpack_from("<H", raw, 12)[0]),
-        "probe3_target": f10_to_c(struct.unpack_from("<H", raw, 14)[0]),
+        "grill_target": round(f10_to_c(struct.unpack_from("<H", raw, 6)[0])),
+        "probe1_target": round(f10_to_c(struct.unpack_from("<H", raw, 10)[0])),
+        "probe2_target": round(f10_to_c(struct.unpack_from("<H", raw, 12)[0])),
+        "probe3_target": round(f10_to_c(struct.unpack_from("<H", raw, 14)[0])),
     }
 
 
@@ -142,6 +142,7 @@ def publish_discovery(mqttc):
             "min": mn,
             "max": mx,
             "step": 1,
+            "suggested_display_precision": 0,
             "availability_topic": f"{TOPIC_PREFIX}/status",
             "device": DEVICE_INFO,
         }
