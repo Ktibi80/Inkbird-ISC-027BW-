@@ -66,7 +66,7 @@ You need three values: `device_id`, `local_key`, and the device's local `IP addr
 1. In the **Devices** tab, you should now see your Inkbird ISC-027BW 2.0
 2. Click on it — the **Device ID** is shown on this page
 3. To get the **Local Key**, go to **Cloud** → **API Explorer** (left sidebar)
-4. Select **Device Management** → **Query Device Details**
+4. Select **Device Management** → **Query Device Details in Bulk**
 5. Enter your `device_id` and click **Submit**
 6. In the response, find the `local_key` field — copy this value
 7. The device's **local IP address** can be found in your router's admin page (connected devices list) or by running `python -m tinytuya scan`
